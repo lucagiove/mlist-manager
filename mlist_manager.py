@@ -75,12 +75,11 @@ class MlistManager():
     def _write(self, data, filename, overwrite=False):
         if not overwrite:
             if os.path.exists(filename):
-                print("ERROR: --to-import file {} "
-                      "already exists".format(filename))
-        else:
-            with open(filename, 'w') as f:
-                for m in sorted(data):
-                    f.write('{}\n'.format(m))
+                raise Exception("ERROR: --to-import file {} "
+                                "already exists".format(filename))
+        with open(filename, 'w') as f:
+            for m in sorted(data):
+                f.write('{}\n'.format(m))
 
     def update(self):
         self.removed = set(self.full - self.export)
