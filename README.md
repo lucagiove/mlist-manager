@@ -13,7 +13,7 @@ This is the complete db where all collected mails are stored.
 
 **export_mlist.csv**
 
-This is the exported csv  that has the real e-mail addresses of the mailing
+This is the exported csv  that has the current e-mail addresses in the mailing
 list (without people that removed themself).
 
 **removed_mlist.csv**
@@ -21,7 +21,7 @@ list (without people that removed themself).
 This includes the addresses that have been removed from the mailing list.
 These addresses should not be re-added for any reason!!!
 
-**import_mlist.csv**
+**output.csv**
 
 This is a list of new addresses ready to be imported in mlist system.
 

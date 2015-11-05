@@ -22,7 +22,7 @@
 #
 #
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 import os
 import re
@@ -31,21 +31,21 @@ from argparse import ArgumentParser
 
 class MlistManager():
 
-    def __init__(self, full_path, export_path,
+    def __init__(self, full_path, current_path,
                  removed_path="", import_path=""):
 
         # TODO if not specified will use as suffix the folder name
         self.full_path = full_path
-        self.export_path = export_path
+        self.current_path = current_path
         self.removed_path = removed_path
 
         self.full = self._load(full_path)
-        self.export = self._load(export_path)
+        self.current = self._load(current_path)
         # removed might not exist
         self.removed = self._load(removed_path, strict=False)
 
         print "full has {} addresses".format(len(self.full))
-        print "export has {} addresses".format(len(self.export))
+        print "current has {} addresses".format(len(self.current))
         print "removed has {} addresses".format(len(self.removed))
 
     def _add_quotes(self, mail):
@@ -75,30 +75,32 @@ class MlistManager():
     def _write(self, data, filename, overwrite=False):
         if not overwrite:
             if os.path.exists(filename):
-                raise Exception("ERROR: --to-import file {} "
-                                "already exists".format(filename))
+                raise Exception("ERROR: file {} "
+                                "already exists.".format(filename))
         with open(filename, 'w') as f:
             for m in sorted(data):
                 f.write('{}\n'.format(m))
 
     def update(self):
-        self.removed = set(self.full - self.export)
-        self.full = set(self.full | self.export)
+        # FIXME if by error data are not updated erroneus removed will be
+        # created
+        self.removed = set(self.full - self.current)
+        self.full = set(self.full | self.current)
 
-        # missing mails in export are added to full
-        self._write(self.full, self.full_path, True)
-        # export is only sanitized and sorted
-        self._write(self.export, self.export_path, True)
+        # missing mails in current are added to full
+        self._write(self.full, self.full_path, overwrite=True)
+        # current is only sanitized and sorted
+        self._write(self.current, self.current_path, overwrite=True)
         # this file is updated
-        self._write(self.removed, self.removed_path, True)
+        self._write(self.removed, self.removed_path, overwrite=True)
 
         print "updated full has {} addresses".format(len(self.full))
-        print "updated export has {} addresses".format(len(self.export))
+        print "updated current has {} addresses".format(len(self.current))
         print "updated removed has {} addresses".format(len(self.removed))
 
     def extract(self, source_path, destination_path):
         extracted = self._load(source_path)
-        self._write(extracted, destination_path, False)
+        self._write(extracted, destination_path, overwrite=False)
 
     def add(self, source_path, destination_path):
         # before adding make sure that all data are updated
@@ -108,11 +110,11 @@ class MlistManager():
         extracted = self._load(source_path)
         print "extracted {} addresses".format(len(extracted))
         # prepare an import file with only the new ones
-        to_import = set(extracted - self.full - self.removed)
-        self._write(to_import, destination_path, False)
-        print "found {} new addresses to be added".format(len(to_import))
-        self.full = set(self.full | to_import)
-        self._write(self.full, self.full_path, True)
+        output = set(extracted - self.full - self.removed)
+        self._write(output, destination_path, overwrite=False)
+        print "found {} new addresses to be added".format(len(output))
+        self.full = set(self.full | output)
+        self._write(self.full, self.full_path, overwrite=True)
         print "updated full has {} addresses".format(len(self.full))
 
 
@@ -124,20 +126,20 @@ def main():
 
     parser = ArgumentParser()
 
-    parser.add_argument("-d", "--data-path",
-                        action='store', dest='DATA', default="./",
-                        help="path where all files are located, if names are "
-                             "defaults will be automatically detected")
+    # ~parser.add_argument("-d", "--data-path",
+                        # ~action='store', dest='DATA', default="./",
+                        # ~help="path where all files are located, if names are "
+                             # ~"defaults will be automatically detected")
 
     parser.add_argument("-f", "--full",
-                        action='store', dest='FULL', default="",
+                        action='store', dest='FULL', default="full.csv",
                         help="the complete db where all collected mails are "
                              "stored")
 
-    parser.add_argument("-e", "--exported",
-                        action='store', dest='EXPORTED', default="",
-                        help="the exported csv that has the real e-mail "
-                             "addresses of the mailing list (without people "
+    parser.add_argument("-c", "--current",
+                        action='store', dest='CURRENT', default="current.csv",
+                        help="the exported csv that has the current e-mail "
+                             "addresses in the mailing list (without people "
                              "that removed themself)")
 
     parser.add_argument("-r", "--removed",
@@ -150,9 +152,9 @@ def main():
                         help="txt file with mails to be added "
                              "in mailing list system")
 
-    parser.add_argument("-i", "--to-import",
-                        action='store', dest='TO_IMPORT',
-                        default="to_import.csv",
+    parser.add_argument("-o", "--output",
+                        action='store', dest='OUTPUT',
+                        default="output.csv",
                         help="list of new addresses ready to be imported "
                              "in mailing list system")
 
@@ -164,13 +166,13 @@ def main():
                         version="%(prog)s {}".format(__version__))
 
     args = parser.parse_args()
-    mm = MlistManager(args.FULL, args.EXPORTED, args.REMOVED)
+    mm = MlistManager(args.FULL, args.CURRENT, args.REMOVED)
 
     if args.UPDATE:
         mm.update()
 
     if args.ADD:
-        mm.add(args.ADD, args.TO_IMPORT)
+        mm.add(args.ADD, args.OUTPUT)
 
     return 0
 
