@@ -29,6 +29,44 @@ import re
 from argparse import ArgumentParser
 
 
+def extract(filename, strict=True):
+    """This method will extract mails using a regex then remove extra ",
+       duplicated and sort"""
+    mails = []
+    regex = re.compile(r'([\w.-]+@+[\w.-]+\.+[\w.]+)')
+    try:
+        with open(filename, 'r') as f:
+            match = re.findall(regex, f.read())
+    except IOError as e:
+        # strict is used to make sure the file exists
+        if strict:
+            raise e
+        # we can return an empty list if the file don't exist and is not
+        # important so that the execution can proceed without problems
+        else:
+            return set([])
+    mails = [_add_quotes(x.lower()) for x in match]
+    return sorted(set(mails))
+
+
+def write_list(data, filename, overwrite=False):
+    if not overwrite:
+        if os.path.exists(filename):
+            raise Exception("ERROR: file {} "
+                            "already exists.".format(filename))
+    with open(filename, 'w') as f:
+        for m in sorted(data):
+            f.write('{}\n'.format(m))
+
+
+def _add_quotes(mail):
+    if mail[0] != '"':
+        mail = '"{}'.format(mail)
+    if mail[-1] != '"':
+        mail = '{}"'.format(mail)
+    return mail
+
+
 class MlistManager():
 
     def __init__(self, full_path, current_path,
@@ -39,47 +77,14 @@ class MlistManager():
         self.current_path = current_path
         self.removed_path = removed_path
 
-        self.full = self._load(full_path)
-        self.current = self._load(current_path)
+        self.full = extract(full_path)
+        self.current = extract(current_path)
         # removed might not exist
-        self.removed = self._load(removed_path, strict=False)
+        self.removed = extract(removed_path, strict=False)
 
         print "full has {} addresses".format(len(self.full))
         print "current has {} addresses".format(len(self.current))
         print "removed has {} addresses".format(len(self.removed))
-
-    def _add_quotes(self, mail):
-        if mail[0] != '"':
-            mail = '"{}'.format(mail)
-        if mail[-1] != '"':
-            mail = '{}"'.format(mail)
-        return mail
-
-    def _load(self, filename, strict=True):
-        mails = []
-        regex = re.compile(r'([\w.-]+@+[\w.-]+\.+[\w.]+)')
-        try:
-            with open(filename, 'r') as f:
-                match = re.findall(regex, f.read())
-        except IOError as e:
-            # strict is used to make sure the file exists
-            if strict:
-                raise e
-            # we can return an empty list if the file don't exist and is not
-            # important so that the execution can proceed without problems
-            else:
-                return set([])
-        mails = [self._add_quotes(x.lower()) for x in match]
-        return set(mails)
-
-    def _write(self, data, filename, overwrite=False):
-        if not overwrite:
-            if os.path.exists(filename):
-                raise Exception("ERROR: file {} "
-                                "already exists.".format(filename))
-        with open(filename, 'w') as f:
-            for m in sorted(data):
-                f.write('{}\n'.format(m))
 
     def update(self):
         # FIXME if by error data are not updated erroneus removed will be
@@ -88,33 +93,29 @@ class MlistManager():
         self.full = set(self.full | self.current)
 
         # missing mails in current are added to full
-        self._write(self.full, self.full_path, overwrite=True)
+        write_list(self.full, self.full_path, overwrite=True)
         # current is only sanitized and sorted
-        self._write(self.current, self.current_path, overwrite=True)
+        write_list(self.current, self.current_path, overwrite=True)
         # this file is updated
-        self._write(self.removed, self.removed_path, overwrite=True)
+        write_list(self.removed, self.removed_path, overwrite=True)
 
         print "updated full has {} addresses".format(len(self.full))
         print "updated current has {} addresses".format(len(self.current))
         print "updated removed has {} addresses".format(len(self.removed))
-
-    def extract(self, source_path, destination_path):
-        extracted = self._load(source_path)
-        self._write(extracted, destination_path, overwrite=False)
 
     def add(self, source_path, destination_path):
         # before adding make sure that all data are updated
         print "updating to makes sure data are reliable..."
         self.update()
         # get the mails from a txt file
-        extracted = self._load(source_path)
+        extracted = extract(source_path)
         print "extracted {} addresses".format(len(extracted))
         # prepare an import file with only the new ones
         output = set(extracted - self.full - self.removed)
-        self._write(output, destination_path, overwrite=False)
+        write_list(output, destination_path, overwrite=False)
         print "found {} new addresses to be added".format(len(output))
         self.full = set(self.full | output)
-        self._write(self.full, self.full_path, overwrite=True)
+        write_list(self.full, self.full_path, overwrite=True)
         print "updated full has {} addresses".format(len(self.full))
 
 
@@ -131,24 +132,25 @@ def main():
                         # ~help="path where all files are located, if names are "
                              # ~"defaults will be automatically detected")
 
-    parser.add_argument("-f", "--full",
-                        action='store', dest='FULL', default="full.csv",
-                        help="the complete db where all collected mails are "
-                             "stored")
+    parser.add_argument("--extract-only",
+                        action='store_true', dest='EXTRACT',
+                        help="mode that parse the txt extracting and "
+                             "sanitizing the mails")
 
-    parser.add_argument("-c", "--current",
-                        action='store', dest='CURRENT', default="current.csv",
-                        help="the exported csv that has the current e-mail "
-                             "addresses in the mailing list (without people "
-                             "that removed themself)")
+    parser.add_argument("--update",
+                        action='store_true', dest='UPDATE',
+                        help="mode that updates the data structure without "
+                             "adding the new addresses. WARNING running this "
+                             "with outdated data might add wrong address to "
+                             "the removed file.")
 
-    parser.add_argument("-r", "--removed",
-                        action='store', dest='REMOVED', default="removed.csv",
-                        help="the addresses that have been removed from the "
-                             "mailing list")
+    parser.add_argument("--add",
+                        action='store_true', dest='ADD',
+                        help="mode that actually does the update and add new "
+                             "addresses")
 
-    parser.add_argument("-a", "--add",
-                        action='store', dest='ADD',
+    parser.add_argument("-i", "--input",
+                        action='store', dest='INPUT',
                         help="txt file with mails to be added "
                              "in mailing list system")
 
@@ -158,21 +160,43 @@ def main():
                         help="list of new addresses ready to be imported "
                              "in mailing list system")
 
-    parser.add_argument("--update",
-                        action='store_true', dest='UPDATE',
-                        help="")
+    parser.add_argument("-f", "--full",
+                        action='store', dest='FULL', default="",
+                        help="the complete db where all collected mails are "
+                             "stored")
+
+    parser.add_argument("-c", "--current",
+                        action='store', dest='CURRENT', default="",
+                        help="the exported csv that has the current e-mail "
+                             "addresses in the mailing list (without people "
+                             "that removed themself)")
+
+    parser.add_argument("-r", "--removed",
+                        action='store', dest='REMOVED', default="removed.csv",
+                        help="the addresses that have been removed from the "
+                             "mailing list")
 
     parser.add_argument('--version', action='version',
                         version="%(prog)s {}".format(__version__))
 
     args = parser.parse_args()
-    mm = MlistManager(args.FULL, args.CURRENT, args.REMOVED)
 
-    if args.UPDATE:
+    if args.EXTRACT:
+        extracted = extract(args.INPUT)
+        print extracted
+        print "input has {} addresses".format(len(extracted))
+        if args.OUTPUT:
+            write_list(extracted, args.OUTPUT)
+        return 0
+    elif args.UPDATE:
+        mm = MlistManager(args.FULL, args.CURRENT, args.REMOVED)
         mm.update()
-
-    if args.ADD:
-        mm.add(args.ADD, args.OUTPUT)
+    elif args.ADD:
+        mm = MlistManager(args.FULL, args.CURRENT, args.REMOVED)
+        mm.add(args.INPUTe, args.OUTPUT)
+    else:
+        parser.error("At least one option between --extract-only, --update\n"
+                     "or --add needs to be selected.")
 
     return 0
 
