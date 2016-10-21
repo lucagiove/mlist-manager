@@ -89,8 +89,8 @@ class MlistManager():
     def update(self):
         # FIXME if by error data are not updated erroneus removed will be
         # created
-        self.removed = set(self.full - self.current)
-        self.full = set(self.full | self.current)
+        self.removed = set(self.full) - set(self.current)
+        self.full = set(self.full) | set(self.current)
 
         # missing mails in current are added to full
         write_list(self.full, self.full_path, overwrite=True)
@@ -111,7 +111,7 @@ class MlistManager():
         extracted = extract(source_path)
         print "extracted {} addresses".format(len(extracted))
         # prepare an import file with only the new ones
-        output = set(extracted - self.full - self.removed)
+        output = set(extracted) - set(self.full) - set(self.removed)
         write_list(output, destination_path, overwrite=False)
         print "found {} new addresses to be added".format(len(output))
         self.full = set(self.full | output)
@@ -193,7 +193,7 @@ def main():
         mm.update()
     elif args.ADD:
         mm = MlistManager(args.FULL, args.CURRENT, args.REMOVED)
-        mm.add(args.INPUTe, args.OUTPUT)
+        mm.add(args.INPUT, args.OUTPUT)
     else:
         parser.error("At least one option between --extract-only, --update\n"
                      "or --add needs to be selected.")
