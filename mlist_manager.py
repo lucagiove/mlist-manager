@@ -49,14 +49,18 @@ def extract(filename, strict=True):
     return sorted(set(mails))
 
 
-def write_list(data, filename, overwrite=False):
+def write_list(data, filename, overwrite=False, append=False):
     if not overwrite:
         if os.path.exists(filename):
             raise Exception("ERROR: file {} "
                             "already exists.".format(filename))
-    with open(filename, 'w') as f:
-        for m in sorted(data):
-            f.write('{}\n'.format(m))
+    if append:
+        f = open(filename, 'a')
+        f.write('\n')
+    else:
+        f = open(filename, 'w')
+    for m in sorted(data):
+        f.write('{}\n'.format(m))
 
 
 def _add_quotes(mail):
@@ -112,7 +116,7 @@ class MlistManager():
         print "extracted {} addresses".format(len(extracted))
         # prepare an import file with only the new ones
         output = set(extracted) - set(self.full) - set(self.removed)
-        write_list(output, destination_path, overwrite=False)
+        write_list(output, destination_path, overwrite=True, append=True)
         print "found {} new addresses to be added".format(len(output))
         self.full = set(self.full | output)
         write_list(self.full, self.full_path, overwrite=True)
@@ -152,7 +156,8 @@ def main():
     parser.add_argument("-i", "--input",
                         action='store', dest='INPUT',
                         help="txt file with mails to be added "
-                             "in mailing list system")
+                             "in mailing list system",
+                        required=False)
 
     parser.add_argument("-o", "--output",
                         action='store', dest='OUTPUT',
@@ -199,6 +204,7 @@ def main():
                      "or --add needs to be selected.")
 
     return 0
+
 
 if __name__ == '__main__':
     main()
